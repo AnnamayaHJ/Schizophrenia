@@ -1,0 +1,383 @@
+---
+title: 'Assignment 3, part 1: Voice'
+author: "Annamaya Halskov-Jensen"
+date: "13/12/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+getwd()
+library(pacman)
+p_load(tidyverse, pastecs, lmerTest, gdata, stringr, plyr)
+locpath = "/Users/annamayahalskov-jensen/Documents/Cognitive Science/3rd semester/Experimental Methods 3/Schizophrenia v2"
+```
+
+
+```{r, loading data, preparation and function}
+
+### One solution ###
+
+#Creating list of files in the folder 'Pitch'
+pitch_list <- list.files(path = locpath, recursive = TRUE, pattern = "*f0.txt")
+
+#Preparing columns
+id = NULL
+study = NULL
+diagnosis = NULL
+trial = NULL
+std = NULL
+var = NULL
+mean = NULL
+range = NULL
+median = NULL
+iqr = NULL
+mad = NULL
+se = NULL
+x = NULL
+n = 1
+
+#Function to extract descriptors for one file
+pitch.data = function(x)
+  {
+  result<-c(
+  mean=mean(x$f0, na.rm=TRUE),
+  median=median(x$f0, na.rm=TRUE),
+  max.min=range(x$f0, na.rm=TRUE),
+  range=max(x$f0, na.rm=TRUE) - min(x$f0, na.rm=TRUE),
+  variance=var(x$f0, na.rm=TRUE),
+  std.Dev=sd(x$f0, na.rm=TRUE),
+  iqr=IQR(x$f0, na.rm = TRUE),
+  mad=mad(x$f0, na.rm = TRUE),
+  coefVar=sd(x$f0, na.rm=TRUE)/mean(x$f0, na.rm=TRUE)*100,
+  se=sd(x$f0, na.rm=TRUE)/sqrt(length(x$f0[!is.na(x)])),
+  quantile=quantile(x$f0, na.rm=TRUE)
+  )
+return(result)
+}
+
+
+```
+
+
+```{r, loading data, loop}
+
+#The loop 
+for (i in pitch_list) {
+  x = read.delim(i, header = T)
+  x = x$f0
+  id[n] = str_extract(i, "S+\\d+")
+  id = str_extract(id,"\\d+")
+  diagnosis[n] = str_extract(str_extract(i,"D+\\d"), "\\d")
+  trial[n] = str_extract(str_extract(i,"T.+\\d"), "\\d+")
+  study[n] = str_extract(i, "\\d")
+  range[n] = range(x,na.rm = T)
+  mean[n] = mean(x,na.rm = T)
+  var[n] = var(x, na.rm=TRUE)
+  std[n] = sd(x)
+  median[n] = median(x, na.rm = T)
+  iqr[n] = IQR(x,na.rm = T)
+  mad[n] = mad(x,na.rm = T)
+  n = n+1
+}
+
+dframe = data.frame(id, study, diagnosis, trial, range, mean, var, std, median, mad, iqr)
+
+```
+
+
+```{r, loading and merging demo data}
+
+demo <- read.delim("DemoData.txt")
+dframe$diagnosis <- ifelse(dframe$diagnosis == 1, "Schizophrenia", "Control")
+demo <- rename.vars(demo, "Study", "study")
+demo <- rename.vars(demo, "Subject", "id")
+demo <- rename.vars(demo, "Diagnosis", "diagnosis")
+
+df <- join(dframe, demo)
+df <- rename.vars(df, "Gender", "gender")
+df <- rename.vars(df, "Education", "education")
+df <- rename.vars(df, "Age", "age")
+df <- rename.vars(df, "Triangles", "triangles")
+df <- select(df, c(id, study, diagnosis, trial, range, mean, var, std, median, mad, iqr, gender, education, age, triangles))
+
+#write_csv(full, "data_all.csv")
+#test_baby <- read.csv("data_all.csv")
+test_curls <- read.csv("data_nanna.csv")
+#test_wow <- read.csv("data_schizo.csv")
+
+```
+
+
+```{r, assumptions and models for each acoustic feature}
+
+#Mean
+stat.desc(df$mean, norm = T)
+df$log_mean<-log(df$mean)
+stat.desc(df$log_mean, norm = T)
+
+lm.mean <- lmer(log_mean ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.mean)
+
+#Assumptions
+plot(residuals(lm.mean))
+qqnorm(residuals(lm.mean))
+hist(residuals(lm.mean))
+
+
+#Median
+stat.desc(df$median, norm = T)
+df$log_median<-log(df$median)
+stat.desc(df$log_median, norm = T)
+
+
+lm.median <- lmer(log_median ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.median)
+
+#Assumptions
+plot(residuals(lm.median))
+qqnorm(residuals(lm.median))
+hist(residuals(lm.median))
+
+#Standard Deviation
+#df$sd <- as.numeric(df$sd)
+df$log_std <- log(df$std)
+stat.desc(df$log_std, norm = T)
+
+lm.std <- lmer(log_std ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.std)
+
+#Assumptions
+plot(residuals(lm.std))
+qqnorm(residuals(lm.std))
+hist(residuals(lm.std))
+
+#Range
+df$log_range<-log(df$range)
+stat.desc(df$log_range, norm = T)
+
+lm.range <- lmer(log_range ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.range)
+
+#Assumptions
+plot(residuals(lm.range))
+qqnorm(residuals(lm.range))
+hist(residuals(lm.range))
+
+#Meadian Absolute Deviation
+df$log_mad<-log(df$mad)
+stat.desc(df$log_mad, norm = T)
+
+lm.mad <- lmer(log_mad ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.mad)
+
+#Assumptions
+plot(residuals(lm.mad))
+qqnorm(residuals(lm.mad))
+hist(residuals(lm.mad))
+
+
+#Coefficient of Variation
+df$log_cv<-log(df$coef_var)
+stat.desc(df$log_cv, norm = T)
+
+lm.cv <- lmer(log_cv ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.cv)
+
+#Assumptions
+plot(residuals(lm.cv))
+qqnorm(residuals(lm.cv))
+hist(residuals(lm.cv))
+
+#Interquartile range
+df$log_iqr<-log(df$iqr)
+stat.desc(df$log_iqr, norm = T)
+
+
+lm.iqr <- lmer(log_iqr ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.iqr)
+
+#Assumptions
+plot(residuals(lm.iqr))
+qqnorm(residuals(lm.iqr))
+hist(residuals(lm.iqr))
+
+
+#Standard Error
+df$log_se<-log(df$se)
+stat.desc(df$log_se, norm = T)
+
+
+lm.se <- lmer(log_se ~ diagnosis + gender + (1 | id) + (1 | trial), df, REML = F)
+summary(lm.se)
+
+#Assumptions
+plot(residuals(lm.se))
+qqnorm(residuals(lm.se))
+hist(residuals(lm.se))
+
+```
+
+
+```{r, cross-validation}
+p_load(caret, Metrics)
+
+#df <- na.omit(df)
+
+folds = createFolds(unique(df$id), 5)
+folds<-lapply(folds, function(x) unique(df$id)[x]) #to rename them what they are actually called in the data
+folds
+
+df$model1_pred<- 0
+df$model2_pred<- 0
+df$model3_pred<- 0
+df$model4_pred<- 0
+df$model5_pred<- 0
+df$model6_pred<- 0
+df$model7_pred<- 0
+df$model8_pred<- 0
+
+for (f in folds) {
+  idx = df$id %in% f
+  train = filter(df, !idx)
+  test = filter(df, idx)
+  
+  model1 = lmer(log_mean ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  model2 = lmer(log_median ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  model3 = lmer(log_range ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  model4 = lmer(log_sd ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  model5 = lmer(log_mad ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  model6 = lmer(log_cv ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  model7 = lmer(log_iqr ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  model8 = lmer(log_se ~ diagnosis + gender + (1 | ID) + (1 | trial), train, REML = F)
+  
+  df$model1_pred[idx] = predict(model1, newdata = test, allow.new.levels = TRUE)
+  df$model2_pred[idx] = predict(model2, newdata = test, allow.new.levels = TRUE)
+  df$model3_pred[idx] = predict(model3, newdata = test, allow.new.levels = TRUE)
+  df$model4_pred[idx] = predict(model4, newdata = test, allow.new.levels = TRUE)
+  df$model5_pred[idx] = predict(model5, newdata = test, allow.new.levels = TRUE)
+  df$model6_pred[idx] = predict(model6, newdata = test, allow.new.levels = TRUE)
+  df$model7_pred[idx] = predict(model7, newdata = test, allow.new.levels = TRUE)
+  df$model8_pred[idx] = predict(model8, newdata = test, allow.new.levels = TRUE)
+  
+}
+
+rmse(df$log_mean, df$model1_pred)
+rmse(df$log_median, df$model2_pred)
+rmse(df$log_range, df$model3_pred)
+rmse(df$log_sd, df$model4_pred)
+rmse(df$log_mad, df$model5_pred)
+rmse(df$log_cv, df$model6_pred)
+rmse(df$log_iqr, df$model7_pred)
+rmse(df$log_se, df$model8_pred)
+```
+
+
+```{r, study as predictor}
+
+#Mean
+st.mean <- lmer(log_mean ~ diagnosis + study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(st.mean)
+
+#Interaction
+in.mean <- lmer(log_mean ~ diagnosis*study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(in.mean)
+
+anova(st.mean, in.mean)
+
+#Median
+st.median <- lmer(log_median ~ diagnosis + study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(st.median)
+
+#Interaction
+in.median <- lmer(log_median ~ diagnosis*study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(in.median)
+
+anova(st.median, in.median)
+
+#Standard Deviation
+st.std <- lmer(log_sd ~ diagnosis + study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(st.std)
+
+#Interaction
+in.std <- lmer(log_sd ~ diagnosis*study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(in.std)
+
+anova(st.std, in.std)
+
+#Range
+st.range <- lmer(log_range ~ diagnosis + study + Gender+ (1 | ID) + (1 | trial), df, REML = F)
+summary(st.range)
+
+#Interaction
+in.range <- lmer(log_range ~ diagnosis*study + Gender+ (1 | ID) + (1 | trial), df, REML = F)
+summary(in.range)
+
+anova(st.range, in.range)
+
+#Meadian Absolute Deviation
+st.mad <- lmer(log_mad ~ diagnosis + study + Gender+ (1 | ID) + (1 | trial), df, REML = F)
+summary(st.mad)
+
+#Interaction
+in.mad <- lmer(log_mad ~ diagnosis*study + Gender+ (1 | ID) + (1 | trial), df, REML = F)
+summary(in.mad)
+
+anova(st.mad, in.mad)
+#Study not significant
+
+#Coefficient of Variation
+st.cv <- lmer(log_cv ~ diagnosis + study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(st.cv)
+
+#Interaction
+in.cv <- lmer(log_cv ~ diagnosis*study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(in.cv)
+
+anova(st.cv, in.cv)
+#Study not significant
+
+#Interquartile range
+st.iqr <- lmer(log_iqr ~ diagnosis + study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(st.iqr)
+
+#Interaction
+in.iqr <- lmer(log_iqr ~ diagnosis*study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(in.iqr)
+
+anova(st.iqr, in.iqr)
+#Study not significant
+
+#Standard Error
+st.se <- lmer(log_se ~ diagnosis + study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(st.se)
+
+#Interaction
+in.se <- lmer(log_se ~ diagnosis*study + Gender + (1 | ID) + (1 | trial), df, REML = F)
+summary(in.se)
+
+anova(st.se, in.se)
+```
+
+
+```{r, plots}
+ggplot(df,
+aes(mean,diagnosis,colour=Gender)) +
+geom_point() +
+theme_classic()
+#Outliers
+
+df$diagnosis <- as.factor(df$diagnosis)
+
+p_load(effects)
+
+plot(allEffects(in.mean))
+plot(allEffects(in.median))
+plot(allEffects(in.range))
+plot(allEffects(in.std))
+
+plot(allEffects(in.mad))
+plot(allEffects(in.iqr))
+plot(allEffects(in.cv))
+plot(allEffects(in.se))
+
+```
